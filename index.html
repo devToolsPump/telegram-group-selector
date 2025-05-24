@@ -3,17 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Group</title>
+    <title>Group Selector</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 16px;
+            background: #f3f2f8;
+            color: #222;
+        }
+        .group {
+            background: white;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+        }
+        .group:hover {
+            background: #f0f0f0;
+        }
+        .group-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .group-members {
+            color: #666;
+            font-size: 14px;
+        }
+        #loader {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+        }
+        #error {
+            color: #ff3b30;
+            padding: 20px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Select a Group</h1>
-        <div id="loader">Loading your groups...</div>
-        <div id="groups-list" class="hidden"></div>
-        <div id="error" class="hidden"></div>
-    </div>
-    <script src="script.js"></script>
+    <div id="loader">Loading your groups...</div>
+    <div id="groups-list" style="display: none;"></div>
+    <div id="error" style="display: none;"></div>
+
+    <script>
+        const tg = Telegram.WebApp;
+        tg.expand();
+        tg.enableClosingConfirmation();
+
+        // Get user ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+
+        // DOM elements
+        const loader = document.getElementById('loader');
+        const groupsList = document.getElementById('groups-list');
+        const errorDiv = document.getElementById('error');
+
+        // Fetch groups from backend
+        async function loadGroups() {
+            try {
+                const response = await fetch(`/api/groups?user_id=${userId}`);
+                if (!response.ok) throw new Error('Network error');
+                
+                const data = await response.json();
+                
+                if (data.groups.length === 0) {
+                    showError("No groups found where you're admin and the bot isn't added yet.");
+                    return;
+                }
+
+                renderGroups(data.groups);
+            } catch (error) {
+                console.error('Failed to load groups:', error);
+                showError("Failed to load groups. Please try again later.");
+            }
+        }
+
+        // Display groups
+        function renderGroups(groups) {
+            loader.style.display = 'none';
+            groupsList.style.display = 'block';
+
+            groups.forEach(group => {
+                const groupElement = document.createElement('div');
+                groupElement.className = 'group';
+                groupElement.innerHTML = `
+                    <div class="group-title">${group.title}</div>
+                    <div class="group-members">${group.members_count} members</div>
+                `;
+
+                groupElement.addEventListener('click', () => {
+                    tg.sendData(JSON.stringify({
+                        group_id: group.id,
+                        group_title: group.title
+                    }));
+                    tg.close();
+                });
+
+                groupsList.appendChild(groupElement);
+            });
+        }
+
+        // Show error
+        function showError(message) {
+            loader.style.display = 'none';
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+        }
+
+        // Start loading groups
+        document.addEventListener('DOMContentLoaded', loadGroups);
+    </script>
 </body>
 </html>
