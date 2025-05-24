@@ -1,29 +1,29 @@
-import { Client } from "telegram";
+const { Client } = require("telegram");
 
-export default async (req, res) => {
-  const user_id = parseInt(req.query.user_id);
-  
-  // Initialize Pyrogram client
-  const client = new Client({
-    apiId: parseInt(process.env.TELEGRAM_API_ID),
-    apiHash: process.env.TELEGRAM_API_HASH,
-    session: "bot_session"
-  });
-
-  await client.connect();
-
+module.exports = async (req, res) => {
   try {
+    const user_id = parseInt(req.query.user_id);
+    console.log("Processing request for user:", user_id);
+
+    const client = new Client({
+      apiId: parseInt(process.env.TELEGRAM_API_ID),
+      apiHash: process.env.TELEGRAM_API_HASH,
+      session: "bot" // Uses bot.session file
+    });
+
+    await client.connect();
+    console.log("Connected to Telegram");
+
     const eligibleGroups = [];
+    const dialogs = await client.getDialogs();
     
-    // Fetch all groups where user is admin
-    for await (const dialog of client.iterDialogs()) {
-      if (dialog.isGroup || dialog.isChannel) {
+    for (const dialog of dialogs) {
+      if (dialog.isGroup) {
         try {
           const admins = await client.getParticipants(dialog.entity, { filter: "admins" });
-          const isUserAdmin = admins.some(admin => admin.id === user_id);
-          const isBotAdmin = admins.some(admin => admin.id === (await client.getMe()).id);
+          const isUserAdmin = admins.some(admin => admin.id.toString() === user_id.toString());
           
-          if (isUserAdmin && !isBotAdmin) {
+          if (isUserAdmin) {
             eligibleGroups.push({
               id: dialog.entity.id,
               title: dialog.entity.title,
@@ -31,15 +31,19 @@ export default async (req, res) => {
             });
           }
         } catch (e) {
-          console.error(`Skipping group ${dialog.entity.id}: ${e}`);
+          console.log(`Skipping group ${dialog.entity.id}:`, e.message);
         }
       }
     }
 
+    console.log("Found groups:", eligibleGroups.length);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(200).json({ groups: eligibleGroups });
     
+  } catch (e) {
+    console.error("API Error:", e);
+    res.status(500).json({ error: e.message });
   } finally {
-    await client.disconnect();
+    await client?.disconnect();
   }
-}
+};
